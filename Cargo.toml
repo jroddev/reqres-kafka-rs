@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "client",
+    "request-proxy",
+    "response-proxy",
+    "rest-api"
+]
