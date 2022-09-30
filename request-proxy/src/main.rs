@@ -1,62 +1,55 @@
-/*
-- wait for rest request
-- assign a uuid
-- put request in pending map
-- send request to Kafka
-- await for response from Kafka
-- reply to rest request
-- remove from pending map
-*/
-
 use axum::Extension;
 use axum::{response::IntoResponse, routing::post, Router};
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{self, Context, Poll, Waker};
+use std::task::{Poll, Waker, Context};
 use std::thread;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-mod kafka_controller;
+mod kafka;
 
 type PendingFutures = Arc<Mutex<HashMap<Uuid, Arc<Mutex<KafkaFutureState>>>>>;
 
 // #[tokio::main]
 fn main() {
+    let kafka_broker = "localhost:9092";
+    let kafka_request_topic = "request";
+    let kafka_response_topic = "response";
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
 
-    runtime.spawn(async {
+    runtime.spawn(async move {
         println!("Hello world");
-        sleep(Duration::from_secs(2)).await;
-        let kafka = kafka_controller::KafkaConnection {
-            brokers: "localhost:9092".to_string(),
-            timeout_ms: 5000,
-        };
-
-        kafka
-            .produce("tester", &Uuid::new_v4().to_string(), "test message")
-            .await;
+        sleep(Duration::from_secs(10)).await;
+        let kafka_producer = kafka::KafkaProducer::new(kafka_broker);
+        kafka_producer.produce(
+            kafka_request_topic,
+            kafka::Request {
+                request_id: Uuid::new_v4().to_string(),
+                data: String::from("Hello there"),
+            },
+        ).await;
     });
 
-    runtime.spawn(async {
+    runtime.spawn(async move {
         println!("kafka consumer");
-
-        let kafka = kafka_controller::KafkaConnection {
-            brokers: "localhost:9092".to_string(),
-            timeout_ms: 5000,
-        };
-
-        kafka.consume(&["tester"]).await;
+        let kafka_consumer = kafka::KafkaConsumer::new("response_listener", kafka_broker, &[kafka_request_topic]);
+        loop {
+            match kafka_consumer.consume_one().await {
+                Ok(message) => {
+                    println!("Received message from Kafka: {message:?}");
+                }
+                Err(e) => eprintln!("KafkaConsumer.KafkaError {e:?}"),
+            }
+        }
     });
 
     let pending_futures = Arc::new(Mutex::new(HashMap::new()));
@@ -68,7 +61,7 @@ fn main() {
     println!("listening on {}", addr);
 
     let app = Router::new()
-        .route("/", post(proxy))
+        .route("/*path", post(proxy))
         .layer(Extension(Arc::clone(&pending_futures)));
 
     runtime.block_on(async {
