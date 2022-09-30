@@ -8,24 +8,8 @@ use rdkafka::message::{Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::topic_partition_list::TopicPartitionList;
 
-#[derive(Debug)]
-pub struct Request {
-    pub request_id: String,
-    pub data: String,
-}
+use crate::common::{Request, RequestId, Response};
 
-#[derive(Debug)]
-pub enum ReponseStatus {
-    Ok,
-    // Timeout,
-}
-
-#[derive(Debug)]
-pub struct Response {
-    pub request_id: String,
-    pub status_code: ReponseStatus,
-    pub data: Option<String>,
-}
 
 pub struct KafkaProducer {
     producer: FutureProducer,
@@ -42,10 +26,10 @@ impl KafkaProducer {
         KafkaProducer { producer }
     }
 
-    pub async fn produce(&self, topic: &str, request: Request) {
+    pub async fn produce(&self, topic: &str, request_id: RequestId, request: Request) {
         let headers = OwnedHeaders::new().insert(Header {
             key: "request_id",
-            value: Some(&request.request_id),
+            value: Some(&request_id.0),
         });
         let key = "0";
         let delivery_status = self.producer.send(
@@ -108,8 +92,7 @@ impl KafkaConsumer {
                 .map(|p| String::from_utf8_lossy(p).to_string());
 
             request_id.map(|request_id| Response {
-                status_code: ReponseStatus::Ok,
-                request_id,
+                request_id: RequestId(request_id),
                 data: payload,
             })
         };

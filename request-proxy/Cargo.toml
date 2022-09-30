@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1.57"
 axum = "0.5.16"
 # rdkafka = { version = "0.28.0", features = ["cmake-build"] }
 rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", tag = "v0.29.0", features = ["cmake-build"] }
