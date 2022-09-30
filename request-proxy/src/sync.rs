@@ -1,23 +1,28 @@
-use std::sync::{Mutex, Arc};
-use std::sync::mpsc::Receiver;
-use std::collections::HashMap;
-use std::task::Waker;
-use uuid::Uuid;
-use crate::common::{Request, Response, RequestId};
+use crate::common::{Request, RequestId, Response};
 use crate::kafka;
+use std::collections::HashMap;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
+use std::task::Waker;
 
+#[derive(Debug)]
 pub struct FutureHandleData {
     pub data: Option<Response>,
-    pub waker: Option<Waker>
+    pub waker: Option<Waker>,
 }
 pub type FutureHandle = Arc<Mutex<FutureHandleData>>;
 
+#[derive(Debug)]
 pub enum Message {
-    Request(FutureHandle, Request),
-    Response(Response)
+    Request(RequestId, FutureHandle, Request),
+    Response(Response),
 }
 
-pub async fn run(sync_rx: Receiver<Message>, kafka_producer: kafka::KafkaProducer, kafka_topic: &str) {
+pub async fn run(
+    sync_rx: Receiver<Message>,
+    kafka_producer: kafka::KafkaProducer,
+    kafka_topic: &str,
+) {
     let mut pending = HashMap::<RequestId, FutureHandle>::new();
 
     loop {
@@ -26,11 +31,15 @@ pub async fn run(sync_rx: Receiver<Message>, kafka_producer: kafka::KafkaProduce
             Err(e) => eprintln!("Error receiving message in sync thread {e}"),
             Ok(message) => {
                 match message {
-                    Message::Request(handle, request) => {
-                        let request_id = RequestId(Uuid::new_v4().to_string());
+                    Message::Request(request_id, handle, request) => {
+                        let already_submitted = pending.contains_key(&request_id);
                         pending.insert(RequestId(request_id.0.clone()), handle.clone());
-                        kafka_producer.produce(&kafka_topic, request_id, request).await;
-                    },
+                        if !already_submitted {
+                            kafka_producer
+                                .produce(kafka_topic, request_id, request)
+                                .await;
+                        }
+                    }
                     Message::Response(response) => {
                         let request_id = response.request_id.clone();
                         match pending.get(&request_id) {
@@ -45,9 +54,9 @@ pub async fn run(sync_rx: Receiver<Message>, kafka_producer: kafka::KafkaProduce
                             },
                             None => eprintln!("Sync: Response received for id: {request_id:?} but did not existing in pending map"),
                         }
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 }

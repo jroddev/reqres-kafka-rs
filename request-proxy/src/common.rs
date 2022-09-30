@@ -3,11 +3,13 @@ pub struct RequestId(pub String);
 
 #[derive(Clone, Debug)]
 pub struct Request {
-    pub data: String
+    pub request_id: RequestId,
+    pub path: String,
+    pub body: String
 }
 
 #[derive(Clone, Debug)]
 pub struct Response {
     pub request_id: RequestId,
-    pub data: Option<String>
+    pub body: Option<String>
 }

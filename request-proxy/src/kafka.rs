@@ -27,22 +27,20 @@ impl KafkaProducer {
     }
 
     pub async fn produce(&self, topic: &str, request_id: RequestId, request: Request) {
-        let headers = OwnedHeaders::new().insert(Header {
-            key: "request_id",
-            value: Some(&request_id.0),
-        });
+        let headers = OwnedHeaders::new()
+            .insert(Header { key: "request_id", value: Some(&request_id.0)})
+            .insert(Header { key: "path", value: Some(&request.path)});
+
         let key = "0";
         let delivery_status = self.producer.send(
             FutureRecord::to(topic)
-                .payload(&request.data)
+                .payload(&request.body)
                 .key(key)
                 .headers(headers),
             Duration::from_secs(0),
         );
-        println!("kafka sent");
-        match delivery_status.await {
-            Err(e) => eprintln!("{:?}", e),
-            Ok(v) => println!("kafka sent confirmed. {:?}", v),
+        if let Err(e) = delivery_status.await {
+            eprintln!("{:?}", e)
         }
     }
 }
@@ -93,7 +91,7 @@ impl KafkaConsumer {
 
             request_id.map(|request_id| Response {
                 request_id: RequestId(request_id),
-                data: payload,
+                body: payload,
             })
         };
 

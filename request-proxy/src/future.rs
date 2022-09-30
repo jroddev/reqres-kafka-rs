@@ -36,6 +36,7 @@ impl Future for ReqResFuture {
             None => {
                 state.waker = Some(cx.waker().clone());
                 match self.sync_tx.send(sync::Message::Request(
+                    self.request.request_id.clone(),
                     Arc::clone(&self.state),
                     self.request.clone(),
                 )) {

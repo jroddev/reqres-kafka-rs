@@ -22,7 +22,7 @@ fn main() {
     runtime.spawn(async move {
         println!("sync thread");
         let kafka_producer = kafka::KafkaProducer::new(kafka_broker);
-        sync::run(rx, kafka_producer, &kafka_request_topic).await;
+        sync::run(rx, kafka_producer, kafka_request_topic).await;
     });
 
     let kafka_consume_tx = tx.clone();
@@ -33,11 +33,10 @@ fn main() {
         loop {
             match kafka_consumer.consume_one().await {
                 Ok(message) => {
-                    println!("Received message from Kafka: {message:?}");
                     kafka_consume_tx
                         .send(sync::Message::Response(Response {
                             request_id: message.request_id,
-                            data: message.data,
+                            body: message.body,
                         }))
                         .unwrap();
                 }
