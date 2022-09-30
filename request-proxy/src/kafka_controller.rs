@@ -109,8 +109,8 @@ impl KafkaConnection {
                     println!("{m:?}");
 
                     if let Some(headers) = m.headers() {
-                        for header in headers.iter() {
-                            println!("  Header {:#?}: {:?}", header.key, header.value);
+                        if let Some(request_id) = headers.iter().find(|header|{header.key == "request_id"}) {
+                            println!("request_id: {}", String::from_utf8_lossy(request_id.value.unwrap_or(&[])));
                         }
                     }
                     consumer.commit_message(&m, CommitMode::Async).unwrap();
