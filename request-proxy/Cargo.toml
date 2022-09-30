@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 axum = "0.5.16"
+# rdkafka = { version = "0.28.0", features = ["cmake-build"] }
+rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", tag = "v0.29.0", features = ["cmake-build"] }
 serde = { version = "1.0.145", features = ["derive"] }
 tokio = { version = "1.21.1", features = ["full"] }
 uuid = { version = "1.1.2", features = ["v4"] }
