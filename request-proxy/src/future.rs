@@ -2,11 +2,12 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{mpsc::Sender, Arc, Mutex},
-    task::{Context, Poll},
+    task::{Context, Poll}, thread::{self, sleep}, time::Duration
 };
+use crate::sync;
+use common::Request;
 
-use crate::{sync, common::{Response, Request}};
-
+#[derive(Debug)]
 pub struct ReqResFuture {
     pub sync_tx: Sender<sync::Message>,
     pub request: Request,
@@ -27,14 +28,15 @@ impl ReqResFuture {
 }
 
 impl Future for ReqResFuture {
-    type Output = Response;
+    type Output = Request;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.state.lock().unwrap();
+        state.waker = Some(cx.waker().clone());
+
         match &state.data {
             Some(d) => Poll::Ready(d.clone()),
             None => {
-                state.waker = Some(cx.waker().clone());
                 match self.sync_tx.send(sync::Message::Request(
                     self.request.request_id.clone(),
                     Arc::clone(&self.state),

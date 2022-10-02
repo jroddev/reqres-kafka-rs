@@ -1,4 +1,3 @@
-use std::time::Duration;
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::stream_consumer::StreamConsumer;
@@ -7,9 +6,9 @@ use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::topic_partition_list::TopicPartitionList;
+use std::time::Duration;
 
-use crate::common::{Request, RequestId, Response};
-
+use common::{Request, RequestId};
 
 pub struct KafkaProducer {
     producer: FutureProducer,
@@ -26,10 +25,16 @@ impl KafkaProducer {
         KafkaProducer { producer }
     }
 
-    pub async fn produce(&self, topic: &str, request_id: RequestId, request: Request) {
+    pub async fn produce(&self, topic: &str, request: Request) {
         let headers = OwnedHeaders::new()
-            .insert(Header { key: "request_id", value: Some(&request_id.0)})
-            .insert(Header { key: "path", value: Some(&request.path)});
+            .insert(Header {
+                key: "request_id",
+                value: Some(&request.request_id.0),
+            })
+            .insert(Header {
+                key: "path",
+                value: Some(&request.path),
+            });
 
         let key = "0";
         let delivery_status = self.producer.send(
@@ -72,9 +77,9 @@ impl KafkaConsumer {
         KafkaConsumer { consumer }
     }
 
-    pub async fn consume_one(&self) -> Result<Response, KafkaError> {
+    pub async fn consume_one(&self) -> Result<Request, KafkaError> {
         let message = self.consumer.recv().await?;
-        let response: Option<Response> = {
+        let response: Option<Request> = {
             let request_id: Option<String> = match message.headers() {
                 Some(headers) => headers
                     .iter()
@@ -85,12 +90,25 @@ impl KafkaConsumer {
                 None => None,
             };
 
-            let payload: Option<String> = message
-                .payload()
-                .map(|p| String::from_utf8_lossy(p).to_string());
+            let request_path: String = match message.headers() {
+                Some(headers) => headers
+                    .iter()
+                    .filter(|h| h.value.is_some())
+                    .find(|h| h.key == "path")
+                    .map(|h| h.value.unwrap())
+                    .map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_else(|| String::from("/")),
+                None => String::from("/"),
+            };
 
-            request_id.map(|request_id| Response {
+            let payload: String = message
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_else(|| String::from(""));
+
+            request_id.map(|request_id| Request {
                 request_id: RequestId(request_id),
+                path: request_path,
                 body: payload,
             })
         };
@@ -103,7 +121,7 @@ impl KafkaConsumer {
             Some(r) => Ok(r),
             None => {
                 panic!("could not parse consumed message into Response object");
-            },
+            }
         }
     }
 }

@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "common",
+    "kafka",
     "client",
     "request-proxy",
     "response-proxy",

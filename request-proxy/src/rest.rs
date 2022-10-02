@@ -3,8 +3,8 @@ use std::{
     sync::{mpsc::Sender, Arc},
 };
 
-use crate::{sync, common::RequestId};
-use crate::{common::Request, future::ReqResFuture};
+use crate::{sync, future::ReqResFuture};
+use common::{Request, RequestId};
 use axum::{extract::Path, response::IntoResponse, routing::post, Router};
 use uuid::Uuid;
 
@@ -28,19 +28,17 @@ async fn proxy(
     Path(path): Path<String>,
     sync_tx: Sender<sync::Message>,
 ) -> impl IntoResponse {
-    println!("request received. path [{path}] body [{body}]");
+    println!("request received. path [{path}]");
     let request_id = RequestId(Uuid::new_v4().to_string());
     let request = Request { request_id, path, body };
     let pubsub_future = ReqResFuture::new(request, sync_tx);
     let pubsub_state = Arc::clone(&pubsub_future.state);
     pubsub_future.await;
     let pubsub_response = &pubsub_state.lock().unwrap();
-    let pubsub_response_data = pubsub_response
+    pubsub_response
         .data
         .as_ref()
-        .expect("Future should not be completed without filling response data");
-    match &pubsub_response_data.body {
-        Some(text) => text.to_owned(),
-        None => String::from(""),
-    }
+        .expect("Future should not be completed without filling response data")
+        .body
+        .to_owned()
 }

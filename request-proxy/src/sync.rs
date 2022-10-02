@@ -1,5 +1,6 @@
-use crate::common::{Request, RequestId, Response};
-use crate::kafka;
+use common::{Request, RequestId};
+use kafka;
+use std::alloc::handle_alloc_error;
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
@@ -7,7 +8,7 @@ use std::task::Waker;
 
 #[derive(Debug)]
 pub struct FutureHandleData {
-    pub data: Option<Response>,
+    pub data: Option<Request>,
     pub waker: Option<Waker>,
 }
 pub type FutureHandle = Arc<Mutex<FutureHandleData>>;
@@ -15,7 +16,7 @@ pub type FutureHandle = Arc<Mutex<FutureHandleData>>;
 #[derive(Debug)]
 pub enum Message {
     Request(RequestId, FutureHandle, Request),
-    Response(Response),
+    Response(Request),
 }
 
 pub async fn run(
@@ -34,11 +35,12 @@ pub async fn run(
                     Message::Request(request_id, handle, request) => {
                         let already_submitted = pending.contains_key(&request_id);
                         pending.insert(RequestId(request_id.0.clone()), handle.clone());
+
                         if !already_submitted {
                             kafka_producer
-                                .produce(kafka_topic, request_id, request)
+                                .produce(kafka_topic, request)
                                 .await;
-                        }
+                            }
                     }
                     Message::Response(response) => {
                         let request_id = response.request_id.clone();
@@ -47,7 +49,12 @@ pub async fn run(
                                 match future.lock() {
                                     Ok(mut future) => {
                                        future.data = Some(response);
-                                       future.waker.as_ref().unwrap().wake_by_ref();
+                                       match &future.waker {
+                                            Some(w) => {
+                                                w.wake_by_ref();
+                                            },
+                                            None => panic!("No waker when response received"),
+                                        }
                                     },
                                     Err(_) => eprintln!("unable to lock Mutex on Future with id {request_id:?}"),
                                 }

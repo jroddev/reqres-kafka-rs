@@ -7,9 +7,3 @@ pub struct Request {
     pub path: String,
     pub body: String
 }
-
-#[derive(Clone, Debug)]
-pub struct Response {
-    pub request_id: RequestId,
-    pub body: Option<String>
-}

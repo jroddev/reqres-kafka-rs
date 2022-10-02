@@ -1,0 +1,11 @@
+[package]
+name = "kafka"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../common" }
+tokio = { version = "1.21.1", features = ["full"] }
+rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", tag = "v0.29.0", features = ["cmake-build"] }

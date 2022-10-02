@@ -1,14 +1,11 @@
-use std::sync::mpsc;
-
-use crate::common::Response;
-
-mod common;
 mod future;
-mod kafka;
 mod rest;
 mod sync;
 
+use std::sync::mpsc;
+
 fn main() {
+    console_subscriber::init();
     let kafka_broker = "localhost:9092";
     let kafka_request_topic = "request";
     let kafka_response_topic = "response";
@@ -34,10 +31,7 @@ fn main() {
             match kafka_consumer.consume_one().await {
                 Ok(message) => {
                     kafka_consume_tx
-                        .send(sync::Message::Response(Response {
-                            request_id: message.request_id,
-                            body: message.body,
-                        }))
+                        .send(sync::Message::Response(message))
                         .unwrap();
                 }
                 Err(e) => eprintln!("KafkaConsumer.KafkaError {e:?}"),
