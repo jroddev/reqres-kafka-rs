@@ -1,6 +1,12 @@
 ---
 version: '2'
 services:
+  rest-api:
+    build:
+      context: .
+      dockerfile: rest-api.Dockerfile
+    ports:
+      - 8080:8080
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:
