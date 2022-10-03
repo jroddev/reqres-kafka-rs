@@ -19,6 +19,13 @@ pub enum Message {
     Response(Request),
 }
 
+
+// pub async fn trigger(request: Request) -> Request {
+//     let (tx, rx) = oneshot::<Request>::channel();
+//     kafka_produce(request, tx);
+//     rx.await
+// }
+
 pub async fn run(
     sync_rx: Receiver<Message>,
     kafka_producer: kafka::KafkaProducer,

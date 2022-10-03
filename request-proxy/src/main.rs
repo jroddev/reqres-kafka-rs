@@ -1,16 +1,16 @@
 mod future;
 mod rest;
 mod sync;
+mod sync_2;
 
-use std::sync::mpsc;
+use tokio::sync::mpsc;
 
 fn main() {
-    console_subscriber::init();
     let kafka_broker = "localhost:9092";
     let kafka_request_topic = "request";
     let kafka_response_topic = "response";
 
-    let (tx, rx) = mpsc::channel::<sync::Message>();
+    let (tx, rx) = mpsc::channel::<sync_2::SyncMessage>(100);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -19,7 +19,7 @@ fn main() {
     runtime.spawn(async move {
         println!("sync thread");
         let kafka_producer = kafka::KafkaProducer::new(kafka_broker);
-        sync::run(rx, kafka_producer, kafka_request_topic).await;
+        sync_2::run(rx, kafka_producer, kafka_request_topic).await;
     });
 
     let kafka_consume_tx = tx.clone();
@@ -31,7 +31,8 @@ fn main() {
             match kafka_consumer.consume_one().await {
                 Ok(message) => {
                     kafka_consume_tx
-                        .send(sync::Message::Response(message))
+                        .send(sync_2::SyncMessage::Response(message))
+                        .await
                         .unwrap();
                 }
                 Err(e) => eprintln!("KafkaConsumer.KafkaError {e:?}"),
