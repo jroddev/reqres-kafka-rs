@@ -21,6 +21,7 @@ Kafdrop UI can be viewed at http://localhost:9000
 
 ## Performance
 ### single request
-direct to 8080: 2ms
-via proxy 3000: 14-17ms
+- direct to 8080: 2ms
+- via proxy 3000: 14-17ms
+
 This was tested via Postman and I did observe extra latency on the first request after being idle for a while
