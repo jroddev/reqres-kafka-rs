@@ -1,76 +1,91 @@
+use axum::http::status::StatusCode;
+use std::{collections::HashMap, thread, time::Duration};
+use tokio::{sync::{mpsc, oneshot}, time::sleep};
+
 use common::{Request, RequestId};
-use kafka;
-use std::alloc::handle_alloc_error;
-use std::collections::HashMap;
-use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
-use std::task::Waker;
 
 #[derive(Debug)]
-pub struct FutureHandleData {
-    pub data: Option<Request>,
-    pub waker: Option<Waker>,
-}
-pub type FutureHandle = Arc<Mutex<FutureHandleData>>;
-
-#[derive(Debug)]
-pub enum Message {
-    Request(RequestId, FutureHandle, Request),
+pub enum SyncMessage {
+    Request(Request, oneshot::Sender<Response>),
     Response(Request),
+    Timeout(RequestId),
 }
 
+#[derive(Debug)]
+pub struct Response {
+    pub status: StatusCode,
+    pub body: Option<String>,
+}
 
-// pub async fn trigger(request: Request) -> Request {
-//     let (tx, rx) = oneshot::<Request>::channel();
-//     kafka_produce(request, tx);
-//     rx.await
-// }
+pub async fn kafka_get(request: Request, sync_tx: mpsc::Sender<SyncMessage>) -> Response {
+    let (tx, rx) = oneshot::channel::<Response>();
+    let sleep_req_id = request.request_id.clone();
+
+    if let Err(e) = sync_tx.send(SyncMessage::Request(request, tx)).await {
+        eprintln!("send error: {e}");
+    }
+
+    tokio::spawn(async move {
+        sleep(Duration::from_secs(5)).await;
+        if let Err(e) = sync_tx.send(SyncMessage::Timeout(sleep_req_id)).await {
+            eprintln!("sleep error {e}");
+        }
+    });
+
+    match rx.await {
+        Ok(res) => res,
+        Err(e) => {
+            eprintln!("receive error: {e}");
+            Response {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                body: None,
+            }
+        }
+    }
+}
 
 pub async fn run(
-    sync_rx: Receiver<Message>,
+    mut sync_rx: mpsc::Receiver<SyncMessage>,
     kafka_producer: kafka::KafkaProducer,
     kafka_topic: &str,
 ) {
-    let mut pending = HashMap::<RequestId, FutureHandle>::new();
+    let mut pending = HashMap::<RequestId, oneshot::Sender<Response>>::new();
 
     loop {
-        let msg = sync_rx.recv();
-        match msg {
-            Err(e) => eprintln!("Error receiving message in sync thread {e}"),
-            Ok(message) => {
-                match message {
-                    Message::Request(request_id, handle, request) => {
-                        let already_submitted = pending.contains_key(&request_id);
-                        pending.insert(RequestId(request_id.0.clone()), handle.clone());
-
-                        if !already_submitted {
-                            kafka_producer
-                                .produce(kafka_topic, request)
-                                .await;
-                            }
-                    }
-                    Message::Response(response) => {
-                        let request_id = response.request_id.clone();
-                        match pending.get(&request_id) {
-                            Some(future) => {
-                                match future.lock() {
-                                    Ok(mut future) => {
-                                       future.data = Some(response);
-                                       match &future.waker {
-                                            Some(w) => {
-                                                w.wake_by_ref();
-                                            },
-                                            None => panic!("No waker when response received"),
-                                        }
-                                    },
-                                    Err(_) => eprintln!("unable to lock Mutex on Future with id {request_id:?}"),
-                                }
-                            },
-                            None => eprintln!("Sync: Response received for id: {request_id:?} but did not existing in pending map"),
+        match sync_rx.recv().await {
+            Some(msg) => match msg {
+                SyncMessage::Request(request, reply_tx) => {
+                    pending.insert(request.request_id.clone(), reply_tx);
+                    kafka_producer.produce(kafka_topic, request).await;
+                }
+                SyncMessage::Response(res) => {
+                    let request_id = res.request_id;
+                    if let Some(request) = pending.remove(&request_id) {
+                        let ok = Response {
+                            status: StatusCode::OK,
+                            body: Some(res.body),
+                        };
+                        if let Err(e) = request.send(ok) {
+                            eprintln!("Failed to ok request {request_id:?}. error: {e:?}");
                         }
                     }
                 }
+                SyncMessage::Timeout(request_id) => {
+                    if let Some(request) = pending.remove(&request_id) {
+                        let timeout = Response {
+                            status: StatusCode::GATEWAY_TIMEOUT,
+                            body: None,
+                        };
+                        if let Err(e) = request.send(timeout) {
+                            eprintln!("Failed to timeout request {request_id:?}. error: {e:?}");
+                        }
+                    }
+                }
+            },
+            None => {
+                eprintln!("Sync thread received none on channel. Likely closed");
+                return;
             }
-        }
+        };
     }
 }

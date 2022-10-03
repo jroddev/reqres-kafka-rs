@@ -1,14 +1,11 @@
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
-use tokio::sync::mpsc;
-use crate::sync_2;
-use common::{Request, RequestId};
+use crate::sync;
 use axum::{extract::Path, response::IntoResponse, routing::post, Router};
+use common::{Request, RequestId};
+use std::net::SocketAddr;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
-pub async fn run(tx: mpsc::Sender<sync_2::SyncMessage>) {
+pub async fn run(tx: mpsc::Sender<sync::SyncMessage>) {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("listening on {}", addr);
 
@@ -26,22 +23,15 @@ pub async fn run(tx: mpsc::Sender<sync_2::SyncMessage>) {
 async fn proxy(
     body: String,
     Path(path): Path<String>,
-    sync_tx: mpsc::Sender<sync_2::SyncMessage>,
-) -> impl IntoResponse {
-    println!("request received. path [{path}]");
+    sync_tx: mpsc::Sender<sync::SyncMessage>,
+) -> impl IntoResponse{
     let request_id = RequestId(Uuid::new_v4().to_string());
-    let request = Request { request_id, path, body };
-    // let pubsub_future = ReqResFuture::new(request, sync_tx);
-    // let pubsub_state = Arc::clone(&pubsub_future.state);
-    // pubsub_future.await;
-    // let pubsub_response = &pubsub_state.lock().unwrap();
-    // pubsub_response
-    //     .data
-    //     .as_ref()
-    //     .expect("Future should not be completed without filling response data")
-    //     .body
-    //     .to_owned()
-
-    let response = sync_2::kafka_get(request, sync_tx).await;
-    response.body.unwrap_or_else(|| "NOTHING".to_string())
+    let request = Request {
+        request_id,
+        path,
+        body,
+    };
+    let response = sync::kafka_get(request, sync_tx).await;
+    println!("status {}", response.status);
+    (response.status, response.body.unwrap_or_else(||"".to_string()))
 }
