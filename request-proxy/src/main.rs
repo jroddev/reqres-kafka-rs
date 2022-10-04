@@ -4,7 +4,7 @@ mod sync;
 use tokio::sync::mpsc;
 
 fn main() {
-    let kafka_broker = "localhost:9092";
+    let kafka_broker = "kafka:29092";
     let kafka_request_topic = "request";
     let kafka_response_topic = "response";
 

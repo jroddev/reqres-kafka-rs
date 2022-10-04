@@ -7,11 +7,7 @@ reqres-kafka-rs is a way of running the request-response pattern (HTTP) over the
 - Requires docker compose to run Kafka.
 
 ## Running
-At the moment the apps need to be run individually
 - sudo docker-compose up
-- cargo run --release --bin rest-api
-- cargo run --release --bin response-proxy
-- cargo run --release --bin request-proxy
 
 Two APIs can then be tested through the proxy
 - `curl -X POST -H "Content-Type: plain/text" --data "testing upper" http://localhost:3000/upper`

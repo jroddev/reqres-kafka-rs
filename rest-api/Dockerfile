@@ -1,4 +1,3 @@
-# from https://windsoilder.github.io/writing_dockerfile_in_rust_project.html
 FROM rust:alpine3.14 as builder
 
 WORKDIR /home/app

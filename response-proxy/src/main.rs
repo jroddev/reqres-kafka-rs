@@ -1,14 +1,10 @@
 use common::Request;
-// consume request topic
-// parse
-// reqwest against rest-api
-// publish to response topic
 use reqwest::{self, Client};
 
 #[tokio::main]
 async fn main() {
-    let rest_api = "http://localhost:8080";
-    let kafka_broker = "localhost:9092";
+    let rest_api = "http://rest-api:8080";
+    let kafka_broker = "kafka:29092";
     let kafka_request_topic = "request";
     let kafka_response_topic = "response";
 

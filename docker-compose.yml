@@ -4,9 +4,19 @@ services:
   rest-api:
     build:
       context: .
-      dockerfile: rest-api.Dockerfile
+      dockerfile: rest-api/Dockerfile
     ports:
       - 8080:8080
+  request-proxy:
+    build:
+      context: .
+      dockerfile: request-proxy/Dockerfile
+    ports:
+      - 3000:3000
+  response-proxy:
+    build:
+      context: .
+      dockerfile: response-proxy/Dockerfile
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:

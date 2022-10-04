@@ -1,5 +1,5 @@
 use axum::http::status::StatusCode;
-use std::{collections::HashMap, thread, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use tokio::{sync::{mpsc, oneshot}, time::sleep};
 
 use common::{Request, RequestId};

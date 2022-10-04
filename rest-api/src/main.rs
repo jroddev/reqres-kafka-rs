@@ -11,7 +11,7 @@ async fn main() {
         .route("/reverse", post(reverse))
         .route("/upper", post(upper));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0,0,0,0], port));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
